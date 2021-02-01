@@ -1,216 +1,53 @@
-<?php
 
-class LandingExportPhp
-{
-    private $endpoint;
-    private $exportHash;
-
-    const MONTH = 2592000;
-
-    public function __construct($exportHash)
-    {
-        $this->endpoint = 'https://www.landingiexport.com';
-        $this->exportHash = $exportHash;
-    }
-
-    public function getLanding($hash)
-    {
-        $data = $this->prepareCurl($hash);
-
-        return $this->injectLightboxHandler(
-            $this->modifyButtonSubmissionEndpoints($this->modifyLandingContent($data), $data),
-            $data
-        );
-    }
-
-    private function buildUrlQuery()
-    {
-        return http_build_query(['export_hash' => $this->exportHash]);
-    }
-
-    private function buildConversionUrlQuery($hash)
-    {
-        return http_build_query(
-            [
-                'conversion_hash' => $hash,
-                'export_hash' => $this->exportHash
-            ],
-            '',
-            '&'
-        );
-    }
-
-    private function chooseWhichUrl($hash)
-    {
-        if ($hash) {
-            return sprintf(
-                '%s/api/render?%s',
-                $this->endpoint,
-                $this->buildConversionUrlQuery($hash)
-            );
-        }
-
-        return sprintf(
-            '%s/api/render?%s',
-            $this->endpoint,
-            $this->buildUrlQuery()
-        );
-    }
-
-    /**
-     * @param $hash
-     * @return bool|mixed
-     */
-    private function prepareCurl($hash)
-    {
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $this->chooseWhichUrl($hash));
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
-        curl_setopt($ch, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
-
-        if (isset($_COOKIE['tid'])) {
-            $tidCookie = $_COOKIE['tid'];
-            curl_setopt($ch, CURLOPT_COOKIE, "stg-tracker=tid=$tidCookie");
-        }
-
-        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-
-        $data = curl_exec($ch);
-        $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $curlErrorCode = curl_errno($ch);
-        $curlErrorMsg = curl_error($ch);
-        curl_close($ch);
-
-        if ($curlErrorCode || $curlErrorMsg) {
-            exit(sprintf('check curl settings: %s %s', $curlErrorCode, $curlErrorMsg));
-        }
-
-        if (in_array($httpcode, [301, 302], true) && is_string($data) && $data = json_decode($data)) {
-            $getParams = $this->unsetExportParam($data->redirect);
-            header('Location: ' . $getParams);
-        }
-
-        if ((404 === $httpcode && is_string($data)) || ($httpcode >= 200 && $httpcode < 300)) {
-            $data = json_decode($data);
-            setcookie('tid', $data->tid, time() + self::MONTH);
-
-            return $data;
-        }
-
-        return $data;
-    }
-
-    private function unsetExportParam($queryStr)
-    {
-        $parser = parse_url($queryStr);
-        $newQuery = [];
-
-        if (isset($parser['query'])) {
-            parse_str($parser['query'], $newQuery);
-        }
-
-        $parser['query'] = array_merge($newQuery, $_REQUEST);
-
-        foreach (['tid', 'export_hash'] as $param) {
-            unset($parser['query'][$param]);
-        }
-
-        $parser['query'] = http_build_query($parser['query']);
-
-        return $this->buildRedirectUrl($parser);
-    }
-
-    private function buildRedirectUrl($parser)
-    {
-        $return = '';
-
-        if (isset($parser['scheme'])) {
-            $return .= $parser['scheme'] . '://';
-        }
-
-        if (isset($parser['host'])) {
-            $return .= $parser['host'];
-        }
-
-        if (isset($parser['path'])) {
-            $return .= $parser['path'];
-        }
-
-        if (!empty($parser['query'])) {
-            $return .= '?' . $parser['query'];
-        }
-
-        return $return;
-    }
-
-    private function getActualLink()
-    {
-        return (isset($_SERVER['HTTPS']) ? 'https' : 'http') . "://$_SERVER[HTTP_HOST]$_SERVER[REQUEST_URI]";
-    }
-
-    private function injectLightboxHandler($content, $data)
-    {
-        $javaScript = <<<HTML
+ <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1" /><meta name="HandheldFriendly" content="true" /><title></title><!--[if lt IE 9]><script src="https://html5shim.googlecode.com/svn/trunk/html5.js"></script><![endif]--><link href="" type="text/css" rel="stylesheet"><link href="https://fonts.googleapis.com/css?family=Open+Sans:300,300italic,400,400italic,700,700italic&subset=latin,latin-ext" type="text/css" rel="stylesheet"><link href="https://fonts.googleapis.com/css?family=Raleway:300,300i,400,400i,700,700i&subset=latin,latin-ext" type="text/css" rel="stylesheet"><link href="https://fonts.googleapis.com/css?family=Roboto:300,300italic,400,400italic,700,700italic&subset=latin,latin-ext" type="text/css" rel="stylesheet"><link href="https://fonts.googleapis.com/css?family=Oswald:300,400,700&subset=latin,latin-ext" type="text/css" rel="stylesheet"><!--[if lt IE 9]><link href="https://old.assets-landingi.com/bootstrap/css/ie8-grid.css?v=8.9.8" type="text/css" rel="stylesheet"><link href="https://styles.assets-landingi.com/W25TJqw1/base_ie8.css" type="text/css" rel="stylesheet"><![endif]--><link href="https://styles.assets-landingi.com/assets/css/2.11-landend-base.css" type="text/css" rel="stylesheet"><link href="https://styles.assets-landingi.com/z0aJ6r1n/base.css" type="text/css" rel="stylesheet"><script>
+    var landingiInternalDetails = {
+        'landing_id': '1025715',
+        'landing_hash': 'https://discord.gg/YUTXfCKs25',
+        'landing_variant_hash': '',
+        'landing_name': 'Breso+RDR2+Mod+Menu',
+        'landing_lang': 'en',
+        'account_uuid': '60bf9e34-643e-11eb-b92d-3618fdd830c0',
+        'apikey': '57073af2-b3d2-4a15-9d54-02a282cc680f'
+   }
+</script><script src="https://popups.landingi.com/api/v3/landing/install-code?apikey=57073af2-b3d2-4a15-9d54-02a282cc680f&landing=https://discord.gg/YUTXfCKs25"></script><script src="https://scripts.assets-landingi.com/lightboxes/lightbox-render.js?v=1612154077"></script>
 <script>
-    if (typeof Lightbox !== 'undefined') {
-        Lightbox.init({
-            exportUrl: '{$this->endpoint}',
-            hash: '{$this->exportHash}',
-            tid: '{$data->tid}',
-            redirectUrl: '{$this->getActualLink()}'
-        });
-        Lightbox.register();    
-    }
-</script>
-HTML;
-
-        return preg_replace('/<\/head>/', sprintf('%s</head>', $javaScript), $content);
-    }
-
-    private function modifyLandingContent($data)
-    {
-        return preg_replace(
-            '/(<input type="hidden" name="_redirect" value)="">/',
-            sprintf(
-                '$1="%s">',
-                $this->getActualLink()
-            ),
-            preg_replace(
-                '/ action="\/([\s\S]*?)"/',
-                sprintf(
-                    ' action="%s/${1}?export_hash=%s&tid=%s"',
-                    $this->endpoint,
-                    $this->exportHash,
-                    $data->tid
-                ),
-                $data->content
-            )
-        );
-    }
-
-    private function modifyButtonSubmissionEndpoints($content, $data)
-    {
-        return preg_replace(
-            '/ href="(?:\/[^\/]+)?(\/button\/[a-zA-z0-9]{32})"/',
-            sprintf(
-                ' href="%s${1}?export_hash=%s&tid=%s"',
-                $this->endpoint,
-                $this->exportHash,
-                $data->tid
-            ),
-            $content
-        );
-    }
-}
-
-            const BASE = "725d8e4fa2abb2604953";
-            $landingHash = null;
-            $landing = new LandingExportPhp(BASE);
-           
-            if (isset($_REQUEST['hash'])) {
-                $landingHash = $_REQUEST['hash'];
-            }
+window.addEventListener('load', function () {
+    LightboxRender.init({
+        useAaf: true
+    })
+});
+</script></head><body id="Zcc579e32ab7c2c234c287cbcbc03f3a7639f9f1">
+<div id="VbAH1H7oOcTviNLA3T42vrV7SvyfEpGN" class="widget widget-section">
+    <div class="row">
+        
+        <div class="container">
             
-            $landing = $landing->getLanding($landingHash);
-            echo $landing;
+            <div id="UWLquIJl2hfuoBGwRdQRUFdzvfo3yufX" class="widget widget-box"></div><form id="OMWSye21D3A1FNtsIowuswmNKx644t0X" class="widget widget-form" data-orientation="vertical" data-version="2.1" action="https://discord.gg/YUTXfCKs25" enctype="multipart/form-data" method="post" novalidate data-hash="https://discord.gg/YUTXfCKs25"target="_blank"><div id="IVR6OtVwxQBsskbbm877W8sFXRtattIs" class="widget widget-container clearfix"><label id="xCBzhXICsRPxTE37aQg85mEnEaSWOKmA" class="widget widget-text widget-regular-label widget-label">Name</label><input class="widget widget-input-text" id="tRWcBXBGnMpld8w7uBk57nmEynsrSTpw"  type="text" subtype="name" placeholder="Digite seu nome" parentId="OMWSye21D3A1FNtsIowuswmNKx644t0X"  name="name"  value=""></div><div id="TxqTxJp9AULCuhACxCc2edOpcUm9Xazt" class="widget widget-container clearfix"><label id="Z4XpvciykcCvceP9ELQtvT4JqwX0ewV7" class="widget widget-text widget-regular-label widget-label">Email</label><input class="widget widget-input-text" id="f549MN8t9SyTd4oDlSXEnU4M97uhVMqP"  type="email" subtype="email" parentId="OMWSye21D3A1FNtsIowuswmNKx644t0X" placeholder="Digite seu email"  name="email"  value=""></div><div id="pDHPwrZ8mFOgqyXQBOgV2VmmZnHZ5qTZ" class="widget widget-container clearfix">
+    <input class="widget widget-input-checkbox" type="checkbox"  id="gBsd59Jtr4lJ0Q5yLk1xOzp7zbPvUhOc"  type="checkbox" parentId="OMWSye21D3A1FNtsIowuswmNKx644t0X"  name="checkbox" ><label id="uLIRXy9iumtZVBb8fD0P2rC8XEGAsIHy" class="widget widget-text widget-checkbox-label widget-label"for="gBsd59Jtr4lJ0Q5yLk1xOzp7zbPvUhOc" data-toggle="tooltip" title="Apos a compra, voce precisa esperar por no maximo 3 horas, ate receber a sua key atraves do seu email.
+Lembrando que esse tempo pode variar
+Horario de suporte: 13:00 as 17:00 (todos os dias)">[ ] Aceito com os termos de usos</label>
+</div><div id="ZZE0og9nDpL2qcqJ132T1xabZkeDgU2D" class="widget widget-container input-button-container clearfix"><button class="widget widget-input-button" type="submit" id="nTXnnxLzqNlVTwq1nt7FGMMJJNpFtsFb"  parentId="OMWSye21D3A1FNtsIowuswmNKx644t0X"><div class="widget-overlay"></div>Comprar (R$ 50,00)</button></div><input type="hidden"    name="_name_"  value=""><input type="hidden"    name="_lead_uuid"  value=""><input type="hidden" name="_uid" value="OMWSye21D3A1FNtsIowuswmNKx644t0X"><input type="hidden" name="_redirect" value=""></form><div id="GtX4ua9eMn18TZgyZhzPlG8aHoPEc5LT" class="widget widget-text"><p>Compre agora seu ModMenu</p><p>e tenha uma nova experiencia </p><p>online</p></div><div id="uB0Fo36ui3rH4V5rw0KupdGWnpbM8dX0" class="widget widget-text"><h1><span style="color: rgb(255, 255, 255);">Breso Menu </span><br><span style="font-weight: bold; color: rgb(254, 47, 47);">RDR2 Online</span></h1></div><div id="SBdOpPXOJP9zCz2yTHpwBHhLzBRs37B7" class="widget widget-text"><p><font color="#ffffff">ModMenu para o jogo Red Dead Redemption 2, na versao para PC, atualizado na ultima versao do jogo, funcionando online</font></p><p><font color="#ffffff">Oque voce recebe ao adquirir o mod:</font></p><p><font color="#ffffff">-Modmenu para o modo offline (versao 1.0 do jogo apenas)</font></p><p><font color="#ffffff">-Modmenu para o Online (versao atual)</font></p></div>
+        </div>
+    </div>
+</div>
+<div id="yDTm0o4BVSX2ZU8Nxfmdx7EJdNK3fK9i" class="widget widget-section">
+    <div class="row">
+        
+        <div class="container">
+            
+            <div id="twZCBalNV3TxdcbtJOQuiISXvvv5BDFL" class="widget widget-box"></div><i id="lHm1nVTRA0katmyEIDzKnw5ebnw6Kd6R" class="fa fa-briefcase widget widget-icon"></i><div id="dWvHoEgDlwyM5k0wg7bVQNNPRHrITt2D" class="widget widget-text"><p><span style="color: rgb(73, 73, 73);">Compras</span></p></div><div id="udVQHALyM8Cr5q2sMZtKX7OMpzwgEMQP" class="widget widget-text"><p><font color="#666666">Entrega em ate no maximo 3 horas</font></p></div><div id="LiTk9vvZfKTifR4LV8pdSGTbBpOv9JwM" class="widget widget-box"></div><div id="PxTXwSzcqIcG2cNo1fFuT4M6EA9kV0fa" class="widget widget-text"><p><font color="#666666">Voce vai receber 2 versoes do mod, uma para o modo historia e outra para o modo online</font></p></div><div id="Ht9P5qpALXDG9zzR5UzKR1Ov32w2MDH0" class="widget widget-text"><p><span style="color: rgb(73, 73, 73);">Offline e Online</span></p></div><i id="FuAIwTRDp0HCml8Mym9EnrVNAARis8FA" class="fa fa-cubes widget widget-icon"></i><div id="ypPFiJ26gq3qttRGX5U6QMxle30ONhTh" class="widget widget-box"></div><div id="pkHIcxZ1FnQSGB8sltIqV52k1SBO0Knv" class="widget widget-text"><p><font color="#666666">Aceitamos pagamentos via</font></p><p><font color="#666666">PayPal, Mercado Pago e</font></p><p><font color="#666666">Boleto (entrega em 3 dias)</font></p></div><div id="NHEpUQ55wTwMpqlWvf3rHNIhTMReKEub" class="widget widget-text"><p><span style="color: rgb(73, 73, 73);">Pagamentos</span></p></div><i id="et43yvEb10p5IGn0KCaHKa60Ja7k0JK5" class="fa fa-credit-card widget widget-icon"></i>
+        </div>
+    </div>
+</div>
+<div id="hMwVgTv31uROo14VrH8s4oIGmKQSP9HV" class="widget widget-section">
+    <div class="row">
+        
+        <div class="container">
+            
+            <div id="uSH25b6kTqrwOZgS80HAOTdAA8zKPe6w" class="widget widget-box"></div><i id="kAuOCDP7h76Uod9ZTLmXGirLlbB5UEFU" class="fa fa-calendar widget widget-icon"></i><div id="FWu3Ey4oTKnPzR9qr6X5tuWIRX7Dwdpf" class="widget widget-text"><p><span style="color: rgb(73, 73, 73);">Banimento</span></p></div><div id="zbbtLOvCkOQR1WOT2mJbbXINAyTmzzU9" class="widget widget-box"></div><div id="ldBehtX0W9q9XSkkSZ4sqFtUiHyMscvo" class="widget widget-text"><p><span style="color: rgb(73, 73, 73);">Tutoriais</span></p></div><div id="JfTx3Z99dZzk7DE2KveIcMn1PNC2hiRO" class="widget widget-text"><p><font color="#666666">Mod sem nenhuma ocorrencia de banimento, tanto offline como online</font></p></div><div id="bL3XVTFfnA9b31Q538C0EezOTVFv1L1W" class="widget widget-text"><p><font color="#666666">Ao comprar, voce vai receber um tutorial</font></p><p><font color="#666666">completo de como usar o mod da </font></p><p><font color="#666666">forma correta</font></p></div><i id="ipPwX4lTVJTTOEveKnWKkmr3OwAwpy19" class="fa fa-bar-chart widget widget-icon"></i><div id="ilo9sg97OmuFDFiMVqfgS7BhdqIrechC" class="widget widget-box"></div><div id="A4s310TyG7qBuXfJAvMqxektQSCQUGMS" class="widget widget-text"><p><font color="#666666">Ao comprar o mod, voce tera acesso</font></p><p><font color="#666666">a ele para sempre ou ate o tempo</font></p><p><font color="#666666">que o mod estiver atuando</font></p></div><div id="AeG6wvul2gsIHIl490N6HH8yDkDHR6KS" class="widget widget-text"><p><span style="color: rgb(73, 73, 73);">Vitalicio</span></p></div><i id="b7oAoZvaA3V76aIbwRN3eN1TaNQtFobv" class="fa fa-balance-scale widget widget-icon"></i>
+        </div>
+    </div>
+</div><script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script><script type="text/javascript" src="https://old.assets-landingi.com/bootstrap/js/landend.bootstrap.min.js"></script><script type="text/javascript" src="https://old.assets-landingi.com/bootstrap/js/bootbox.min.js"></script><script type="text/javascript" src="https://old.assets-landingi.com/js/landing.js"></script><script type="text/javascript" src="https://old.assets-landingi.com/assets/js/dist/landend/301019/landend.js"></script><script type="text/javascript" src="https://old.assets-landingi.com/assets/vendor/bootstrap/2890/js/bootstrap-tooltips.min.js"></script>
+<script type="text/javascript" src="https://scripts.assets-landingi.com/landend/tooltips.js"></script><script type='text/javascript' src='https://old.assets-landingi.com/assets/js/vendor/jquery-form/jquery.form.min.js'></script>
+<script type="text/javascript" src="https://old.assets-landingi.com/assets/js/landend/241120/landend.js"></script>
+<script type="text/javascript" src="https://old.assets-landingi.com/assets/js/landend/260820/validation.js"></script><script type="text/javascript" src="https://scripts.assets-landingi.com/shopify/27072020/iframe.js"></script><script src="https://stats.landingi.com/track/1025715"></script><script type="text/javascript" src="https://scripts.assets-landingi.com/landend/030820/files.js"></script><script src="https://scripts.assets-landingi.com/video-bg/v0.5/videoBackground.js"></script></body></html>
